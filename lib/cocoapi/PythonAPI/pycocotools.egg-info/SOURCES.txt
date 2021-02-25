@@ -1,6 +1,5 @@
 setup.py
 ../common/maskApi.c
-../common/maskApi.c
 pycocotools/__init__.py
 pycocotools/_mask.c
 pycocotools/_mask.pyx
