@@ -2,11 +2,13 @@ import torch.utils.model_zoo as model_zoo
 import math
 
 import torch.nn as nn
-# from .shufflenet import *
+
 import sys
 import os
 sys.path.append(os.path.abspath(""))
 from lib.DCNv2.dcn_v2 import DCN
+from nets.shufflenet import *
+from nets.res2net import res2net50
 
 
 BN_MOMENTUM = 0.1
@@ -133,20 +135,21 @@ def fill_fc_weights(layers):
 
 class PoseResNet(nn.Module):
     def __init__(self, block, layers, head_conv, num_classes):
-        self.inplanes = 64
+        self.inplanes = 2048
         self.deconv_with_bias = False
         self.num_classes = num_classes
 
         super(PoseResNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7,
-                               stride=2, padding=3, bias=False)
-        self.bn1 = nn.BatchNorm2d(64, momentum=BN_MOMENTUM)
-        self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
+        # self.conv1 = nn.Conv2d(3, 64, kernel_size=7,
+        #                        stride=2, padding=3, bias=False)
+        # self.bn1 = nn.BatchNorm2d(64, momentum=BN_MOMENTUM)
+        # self.relu = nn.ReLU(inplace=True)
+        # self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        # self.layer1 = self._make_layer(block, 64, layers[0])
+        # self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+        # self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+        # self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
+        self.backbone = res2net50(True)
 
         # used for deconv layers
         self.deconv_layers = self._make_deconv_layer(
@@ -154,35 +157,35 @@ class PoseResNet(nn.Module):
 
         if head_conv > 0:
             # heatmap layers
-            # self.hmap = nn.Sequential(nn.Conv2d(64, head_conv, kernel_size=3, padding=1, bias=True),
-            #                           nn.ReLU(inplace=True),
-            #                           nn.Conv2d(head_conv, num_classes, kernel_size=1, bias=True))
+            self.hmap = nn.Sequential(nn.Conv2d(64, head_conv, kernel_size=3, padding=1, bias=True),
+                                      nn.ReLU(inplace=True),
+                                      nn.Conv2d(head_conv, num_classes, kernel_size=1, bias=True))
             # self.hmap = nn.Sequential(ShuffleNetUnitV2A(64, head_conv, 2),
             #                           nn.ReLU(inplace=True),
             #                           nn.Conv2d(head_conv, num_classes, kernel_size=1, bias=True))
-            self.hmap = nn.Sequential(conv_dw(64, head_conv),
-                                      # nn.ReLU(inplace=True),
-                                      nn.Conv2d(head_conv, num_classes, kernel_size=1, bias=True))
+            # self.hmap = nn.Sequential(conv_dw(64, head_conv),
+            #                           # nn.ReLU(inplace=True),
+            #                           nn.Conv2d(head_conv, num_classes, kernel_size=1, bias=True))
             self.hmap[-1].bias.data.fill_(-2.19)
             # regression layers
-            # self.regs = nn.Sequential(nn.Conv2d(64, head_conv, kernel_size=3, padding=1, bias=True),
-            #                           nn.ReLU(inplace=True),
-            #                           nn.Conv2d(head_conv, 2, kernel_size=1, bias=True))
+            self.regs = nn.Sequential(nn.Conv2d(64, head_conv, kernel_size=3, padding=1, bias=True),
+                                      nn.ReLU(inplace=True),
+                                      nn.Conv2d(head_conv, 2, kernel_size=1, bias=True))
             # self.regs = nn.Sequential(ShuffleNetUnitV2A(64, head_conv, 2),
             #                           nn.ReLU(inplace=True),
             #                           nn.Conv2d(head_conv, 2, kernel_size=1, bias=True))
-            self.regs = nn.Sequential(conv_dw(64, head_conv),
-                                      # nn.ReLU(inplace=True),
-                                      nn.Conv2d(head_conv, 2, kernel_size=1, bias=True))
-            # self.w_h_ = nn.Sequential(nn.Conv2d(64, head_conv, kernel_size=3, padding=1, bias=True),
-            #                           nn.ReLU(inplace=True),
+            # self.regs = nn.Sequential(conv_dw(64, head_conv),
+            #                           # nn.ReLU(inplace=True),
             #                           nn.Conv2d(head_conv, 2, kernel_size=1, bias=True))
+            self.w_h_ = nn.Sequential(nn.Conv2d(64, head_conv, kernel_size=3, padding=1, bias=True),
+                                      nn.ReLU(inplace=True),
+                                      nn.Conv2d(head_conv, 2, kernel_size=1, bias=True))
             # self.w_h_ = nn.Sequential(ShuffleNetUnitV2A(64, head_conv, 2),
             #                           nn.ReLU(inplace=True),
             #                           nn.Conv2d(head_conv, 2, kernel_size=1, bias=True))
-            self.w_h_ = nn.Sequential(conv_dw(64, head_conv),
-                                      # nn.ReLU(inplace=True),
-                                      nn.Conv2d(head_conv, 2, kernel_size=1, bias=True))
+            # self.w_h_ = nn.Sequential(conv_dw(64, head_conv),
+            #                           # nn.ReLU(inplace=True),
+            #                           nn.Conv2d(head_conv, 2, kernel_size=1, bias=True))
         else:
             # heatmap layers
             self.hmap = nn.Conv2d(64, num_classes, kernel_size=1, bias=True)
@@ -260,25 +263,26 @@ class PoseResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
+        # x = self.conv1(x)
+        # x = self.bn1(x)
+        # x = self.relu(x)
+        # x = self.maxpool(x)
 
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
+        # x = self.layer1(x)
+        # x = self.layer2(x)
+        # x = self.layer3(x)
+        # x = self.layer4(x)
+        x = self.backbone(x)
 
         x = self.deconv_layers(x)
         out = [[self.hmap(x), self.regs(x), self.w_h_(x)]]
         return out
 
     def init_weights(self, num_layers):
-        url = model_urls['resnet{}'.format(num_layers)]
-        pretrained_state_dict = model_zoo.load_url(url)
-        print('=> loading pretrained model {}'.format(url))
-        self.load_state_dict(pretrained_state_dict, strict=False)
+        # url = model_urls['resnet{}'.format(num_layers)]
+        # pretrained_state_dict = model_zoo.load_url(url)
+        # print('=> loading pretrained model {}'.format(url))
+        # self.load_state_dict(pretrained_state_dict, strict=False)
         print('=> init deconv weights from normal distribution')
         for name, m in self.deconv_layers.named_modules():
             if isinstance(m, nn.BatchNorm2d):

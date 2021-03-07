@@ -95,7 +95,9 @@ class PoseResNet(nn.Module):
     self.deconv_with_bias = False
     self.num_classes = num_classes
 
-    self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+    self.conv1_1 = nn.Conv2d(3,64,kernel_size=3,stride=1,padding=1,bias=False)
+    self.conv1_2 = nn.Conv2d(64,64,kernel_size=3,stride=2,padding=1,bias=False)
+    # self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
     self.bn1 = nn.BatchNorm2d(64, momentum=BN_MOMENTUM)
     self.relu = nn.ReLU(inplace=True)
     self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -251,5 +253,5 @@ if __name__ == '__main__':
     if isinstance(m, nn.Conv2d):
       m.register_forward_hook(hook)
 
-  y = net(torch.randn(2, 3, 384, 384))
+  y = net(torch.randn(2, 3, 512, 512))
   # print(y.size())

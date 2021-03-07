@@ -18,7 +18,7 @@ from datasets.coco import COCO, COCO_eval
 from datasets.pascal import PascalVOC, PascalVOC_eval
 
 from nets.hourglass import get_hourglass
-from nets.resdcn import get_pose_net
+from nets.res2dcn import get_pose_net
 
 from utils.utils import _tranpose_and_gather_feature, load_model
 from utils.image import transform_preds
